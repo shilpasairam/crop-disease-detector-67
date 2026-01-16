@@ -1,6 +1,7 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
   <title>Crop Disease Detector</title>
   <!-- Load TensorFlow.js -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
@@ -69,13 +70,13 @@
   <script>
     let model;
 
-    // Load the model
+    // Load the model from root
     async function loadModel() {
       try {
-        model = await tf.loadLayersModel('model.json');
-        console.log("Model loaded successfully");
+        model = await tf.loadLayersModel('model.json'); 
+        console.log("✅ Model loaded successfully");
       } catch (error) {
-        console.error("Error loading model:", error);
+        console.error("❌ Error loading model:", error);
       }
     }
 
@@ -100,14 +101,14 @@
 
       // Capture frame from video
       const tensor = tf.browser.fromPixels(video)
-        .resizeNearestNeighbor([224, 224]) // resize to model input size
+        .resizeNearestNeighbor([224, 224]) // adjust if your model expects different size
         .toFloat()
-        .expandDims(); // add batch dimension
+        .expandDims();
 
       const prediction = model.predict(tensor);
-      const result = prediction.dataSync(); // get raw values
+      const result = await prediction.data();
 
-      // Example: assume binary classification [healthy, unhealthy]
+      // Example: binary classification [Healthy, Unhealthy]
       const healthyProb = result[0];
       const unhealthyProb = result[1];
 
@@ -121,8 +122,8 @@
       document.getElementById('result').innerText = output;
     }
 
+    // Load model on page start
     loadModel();
   </script>
 </body>
 </html>
-
