@@ -1,118 +1,166 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Crop Disease Detector</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <title>Crop Disease Detector</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<style>
-  body {
-    font-family: Arial, sans-serif;
-    background: #e8f5e9;
-    text-align: center;
-    margin: 0;
-    padding: 20px;
-  }
-  header {
-    background: #2e7d32;
-    color: white;
-    padding: 15px;
-    font-size: 24px;
-    font-weight: bold;
-  }
-  button {
-    background: #43a047;
-    color: white;
-    border: none;
-    padding: 12px 20px;
-    font-size: 17px;
-    border-radius: 8px;
-    margin: 10px;
-    cursor: pointer;
-  }
-  button:hover {
-    background: #2e7d32;
-  }
-  #webcam-container {
-    margin: 20px auto;
-    width: 320px;
-    height: 320px;
-    border: 4px solid #2e7d32;
-    border-radius: 10px;
-  }
-  #webcam-container canvas {
-    width: 100%;
-    height: 100%;
-  }
-  #label-container {
-    margin-top: 15px;
-    font-size: 20px;
-    font-weight: bold;
-    color: #1b5e20;
-  }
-</style>
+  <!-- TensorFlow & Teachable Machine -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #eaf7ea;
+      text-align: center;
+      margin: 0;
+    }
+    header {
+      background: #2e7d32;
+      color: white;
+      padding: 15px;
+      font-size: 22px;
+      font-weight: bold;
+    }
+    .container {
+      padding: 20px;
+    }
+    button {
+      background: #4caf50;
+      color: white;
+      border: none;
+      padding: 12px 18px;
+      margin: 10px;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #43a047;
+    }
+    #webcam-container {
+      margin: 20px auto;
+      width: 280px;
+      height: 280px;
+      border: 4px solid #2e7d32;
+      border-radius: 12px;
+      background: #f1f8f1;
+    }
+    #label-container {
+      font-size: 18px;
+      margin-top: 15px;
+      color: #1b5e20;
+      font-weight: bold;
+    }
+  </style>
 </head>
 
 <body>
+  <header>🌱 Crop Disease Detector</header>
 
-<header>🌱 Crop Disease Detector</header>
+  <div class="container">
+    <p>Place your crop leaf in front of the camera and click buttons:</p>
 
-<p>Place your crop leaf in front of the camera and click buttons:</p>
+    <button onclick="startCamera()">Start Camera</button>
+    <button onclick="predict()">Predict</button>
+    <br>
+    <button onclick="openImage()">Upload Leaf Image</button>
 
-<button onclick="init()">Start Camera</button>
-<button onclick="predictOnce()">Predict</button>
+    <div id="webcam-container"></div>
+    <div id="label-container">Model loading...</div>
 
-<div id="webcam-container"></div>
-<div id="label-container"></div>
+    <input type="file" id="imageUpload" accept="image/*" hidden>
+  </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+  <script>
+    const URL = "https://teachablemachine.withgoogle.com/models/i7je_3xwZ/";
 
-<script>
-  const URL = "https://teachablemachine.withgoogle.com/models/i7je_3xwZ/";
+    let model, webcam, maxPredictions;
+    let history = [];
+    const THRESHOLD = 0.7;
+    const STABLE_FRAMES = 5;
 
-  let model, webcam, labelContainer, maxPredictions;
+    async function loadModel() {
+      const modelURL = URL + "model.json";
+      const metadataURL = URL + "metadata.json";
 
-  async function init() {
-    labelContainer = document.getElementById("label-container");
-    labelContainer.innerHTML = "Loading model...";
+      model = await tmImage.load(modelURL, metadataURL);
+      maxPredictions = model.getTotalClasses();
 
-    model = await tmImage.load(URL + "model.json", URL + "metadata.json");
-    maxPredictions = model.getTotalClasses();
+      document.getElementById("label-container").innerText =
+        "Model loaded. Start camera.";
+    }
 
-    webcam = new tmImage.Webcam(320, 320, true);
-    await webcam.setup();
-    await webcam.play();
+    async function startCamera() {
+      try {
+        webcam = new tmImage.Webcam(280, 280, true);
+        await webcam.setup();
+        await webcam.play();
+        window.requestAnimationFrame(loop);
 
-    document.getElementById("webcam-container").innerHTML = "";
-    document.getElementById("webcam-container").appendChild(webcam.canvas);
-
-    labelContainer.innerHTML = "Camera started. Show a leaf 🌿";
-
-    window.requestAnimationFrame(loop);
-  }
-
-  async function loop() {
-    webcam.update();   // VERY IMPORTANT
-    await predict();
-    window.requestAnimationFrame(loop);
-  }
-
-  async function predict() {
-    const prediction = await model.predict(webcam.canvas);
-
-    let best = prediction[0];
-    for (let i = 1; i < prediction.length; i++) {
-      if (prediction[i].probability > best.probability) {
-        best = prediction[i];
+        document.getElementById("webcam-container").innerHTML = "";
+        document.getElementById("webcam-container").appendChild(webcam.canvas);
+      } catch (err) {
+        document.getElementById("label-container").innerText =
+          "Camera blocked. Please upload an image instead.";
       }
     }
 
-    labelContainer.innerHTML =
-      `${best.className} — ${(best.probability * 100).toFixed(1)}%`;
-  }
-</script>
+    async function loop() {
+      webcam.update();
+      window.requestAnimationFrame(loop);
+    }
 
+    async function predict() {
+      if (!model || !webcam) {
+        alert("Model or camera not ready!");
+        return;
+      }
+
+      const prediction = await model.predict(webcam.canvas);
+      prediction.sort((a, b) => b.probability - a.probability);
+
+      if (prediction[0].probability < THRESHOLD) {
+        history = [];
+        document.getElementById("label-container").innerText =
+          "Hold leaf steady 🌿";
+        return;
+      }
+
+      history.push(prediction[0].className);
+      if (history.length > STABLE_FRAMES) history.shift();
+
+      const stable = history.every(v => v === history[0]);
+      if (!stable) return;
+
+      document.getElementById("label-container").innerHTML = `
+        ${prediction[0].className} — ${(prediction[0].probability * 100).toFixed(1)}%<br>
+        Alternative: ${prediction[1].className} (${(prediction[1].probability * 100).toFixed(1)}%)
+      `;
+    }
+
+    function openImage() {
+      document.getElementById("imageUpload").click();
+    }
+
+    document.getElementById("imageUpload").addEventListener("change", async e => {
+      if (!model) return;
+
+      const img = new Image();
+      img.src = URL.createObjectURL(e.target.files[0]);
+      img.onload = async () => {
+        const prediction = await model.predict(img);
+        prediction.sort((a, b) => b.probability - a.probability);
+
+        document.getElementById("label-container").innerHTML = `
+          ${prediction[0].className} — ${(prediction[0].probability * 100).toFixed(1)}%<br>
+          Alternative: ${prediction[1].className} (${(prediction[1].probability * 100).toFixed(1)}%)
+        `;
+      };
+    });
+
+    loadModel();
+  </script>
 </body>
 </html>
-
