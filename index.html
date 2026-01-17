@@ -69,36 +69,36 @@
 <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
 
 <script>
-  const MODEL_URL = "https://teachablemachine.withgoogle.com/models/i7je_3xwZ/";
+  const URL = "https://teachablemachine.withgoogle.com/models/i7je_3xwZ/";
+
   let model, webcam, labelContainer, maxPredictions;
 
   async function init() {
     labelContainer = document.getElementById("label-container");
-    labelContainer.innerText = "Loading model and camera…";
+    labelContainer.innerHTML = "Loading model...";
 
-    try {
-      model = await tmImage.load(MODEL_URL + "model.json", MODEL_URL + "metadata.json");
-      maxPredictions = model.getTotalClasses();
+    model = await tmImage.load(URL + "model.json", URL + "metadata.json");
+    maxPredictions = model.getTotalClasses();
 
-      webcam = new tmImage.Webcam(320, 320, true);
-      await webcam.setup();
-      await webcam.play();
+    webcam = new tmImage.Webcam(320, 320, true);
+    await webcam.setup();
+    await webcam.play();
 
-      document.getElementById("webcam-container").appendChild(webcam.canvas);
+    document.getElementById("webcam-container").innerHTML = "";
+    document.getElementById("webcam-container").appendChild(webcam.canvas);
 
-      labelContainer.innerText = "Model loaded — Ready!";
-    } catch (err) {
-      labelContainer.innerText = "Error loading model or camera!";
-      console.error(err);
-    }
+    labelContainer.innerHTML = "Camera started. Show a leaf 🌿";
+
+    window.requestAnimationFrame(loop);
   }
 
-  async function predictOnce() {
-    if (!model || !webcam) {
-      alert("Start camera first!");
-      return;
-    }
+  async function loop() {
+    webcam.update();   // VERY IMPORTANT
+    await predict();
+    window.requestAnimationFrame(loop);
+  }
 
+  async function predict() {
     const prediction = await model.predict(webcam.canvas);
 
     let best = prediction[0];
@@ -108,11 +108,11 @@
       }
     }
 
-    const percent = (best.probability * 100).toFixed(1);
-    document.getElementById("label-container").innerText =
-      `${best.className} — ${percent}%`;
+    labelContainer.innerHTML =
+      `${best.className} — ${(best.probability * 100).toFixed(1)}%`;
   }
 </script>
 
 </body>
 </html>
+
