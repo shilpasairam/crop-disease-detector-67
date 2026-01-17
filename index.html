@@ -5,7 +5,6 @@
   <title>Crop Disease Detector</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <!-- TensorFlow & Teachable Machine -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest"></script>
 
@@ -36,16 +35,13 @@
       font-size: 16px;
       cursor: pointer;
     }
-    button:hover {
-      background: #43a047;
-    }
     #webcam-container {
       margin: 20px auto;
       width: 280px;
       height: 280px;
       border: 4px solid #2e7d32;
       border-radius: 12px;
-      background: #f1f8f1;
+      background: black;
     }
     #label-container {
       font-size: 18px;
@@ -64,13 +60,9 @@
 
     <button onclick="startCamera()">Start Camera</button>
     <button onclick="predict()">Predict</button>
-    <br>
-    <button onclick="openImage()">Upload Leaf Image</button>
 
     <div id="webcam-container"></div>
-    <div id="label-container">Model loading...</div>
-
-    <input type="file" id="imageUpload" accept="image/*" hidden>
+    <div id="label-container">Loading model...</div>
   </div>
 
   <script>
@@ -78,8 +70,8 @@
 
     let model, webcam, maxPredictions;
     let history = [];
-    const THRESHOLD = 0.7;
     const STABLE_FRAMES = 5;
+    const CONFIDENCE = 0.7;
 
     async function loadModel() {
       const modelURL = URL + "model.json";
@@ -89,21 +81,26 @@
       maxPredictions = model.getTotalClasses();
 
       document.getElementById("label-container").innerText =
-        "Model loaded. Start camera.";
+        "Model loaded. Click Start Camera.";
     }
 
     async function startCamera() {
       try {
-        webcam = new tmImage.Webcam(280, 280, true);
-        await webcam.setup();
+        webcam = new tmImage.Webcam(280, 280, false);
+
+        await webcam.setup({
+          facingMode: "environment"
+        });
+
         await webcam.play();
         window.requestAnimationFrame(loop);
 
         document.getElementById("webcam-container").innerHTML = "";
         document.getElementById("webcam-container").appendChild(webcam.canvas);
-      } catch (err) {
+
+      } catch (e) {
         document.getElementById("label-container").innerText =
-          "Camera blocked. Please upload an image instead.";
+          "Camera permission denied. Allow camera access and reload.";
       }
     }
 
@@ -113,52 +110,26 @@
     }
 
     async function predict() {
-      if (!model || !webcam) {
-        alert("Model or camera not ready!");
-        return;
-      }
+      if (!webcam || !model) return;
 
       const prediction = await model.predict(webcam.canvas);
       prediction.sort((a, b) => b.probability - a.probability);
 
-      if (prediction[0].probability < THRESHOLD) {
+      if (prediction[0].probability < CONFIDENCE) {
         history = [];
         document.getElementById("label-container").innerText =
-          "Hold leaf steady 🌿";
+          "Hold leaf steady...";
         return;
       }
 
       history.push(prediction[0].className);
       if (history.length > STABLE_FRAMES) history.shift();
 
-      const stable = history.every(v => v === history[0]);
-      if (!stable) return;
+      if (!history.every(v => v === history[0])) return;
 
-      document.getElementById("label-container").innerHTML = `
-        ${prediction[0].className} — ${(prediction[0].probability * 100).toFixed(1)}%<br>
-        Alternative: ${prediction[1].className} (${(prediction[1].probability * 100).toFixed(1)}%)
-      `;
+      document.getElementById("label-container").innerHTML =
+        `${prediction[0].className} — ${(prediction[0].probability * 100).toFixed(1)}%`;
     }
-
-    function openImage() {
-      document.getElementById("imageUpload").click();
-    }
-
-    document.getElementById("imageUpload").addEventListener("change", async e => {
-      if (!model) return;
-
-      const img = new Image();
-      img.src = URL.createObjectURL(e.target.files[0]);
-      img.onload = async () => {
-        const prediction = await model.predict(img);
-        prediction.sort((a, b) => b.probability - a.probability);
-
-        document.getElementById("label-container").innerHTML = `
-          ${prediction[0].className} — ${(prediction[0].probability * 100).toFixed(1)}%<br>
-          Alternative: ${prediction[1].className} (${(prediction[1].probability * 100).toFixed(1)}%)
-        `;
-      };
-    });
 
     loadModel();
   </script>
