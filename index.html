@@ -1,105 +1,103 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Crop Disease Detector</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8">
+<title>Crop Disease Detector</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <style>
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: linear-gradient(135deg, #7ee8fa, #80ff72);
-      text-align: center;
-    }
-
-    header {
-      background: #1e8e3e;
-      color: white;
-      padding: 15px;
-      font-size: 24px;
-      font-weight: bold;
-    }
-
-    .container {
-      background: white;
-      width: 90%;
-      max-width: 500px;
-      margin: 30px auto;
-      padding: 20px;
-      border-radius: 12px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-    }
-
-    button {
-      background: #ff7043;
-      color: white;
-      border: none;
-      padding: 12px 20px;
-      font-size: 16px;
-      border-radius: 8px;
-      margin: 10px;
-      cursor: pointer;
-    }
-
-    button:hover {
-      background: #ff5722;
-    }
-
-    video {
-      width: 100%;
-      border-radius: 10px;
-      border: 3px solid #ff7043;
-      margin-top: 15px;
-    }
-
-    #status {
-      margin-top: 15px;
-      font-weight: bold;
-      font-size: 18px;
-    }
-  </style>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background: #e8f5e9;
+    text-align: center;
+    margin: 0;
+    padding: 20px;
+  }
+  header {
+    background: #2e7d32;
+    color: white;
+    padding: 15px;
+    font-size: 24px;
+    font-weight: bold;
+  }
+  button {
+    background: #43a047;
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    font-size: 17px;
+    border-radius: 8px;
+    margin: 10px;
+    cursor: pointer;
+  }
+  button:hover {
+    background: #2e7d32;
+  }
+  #webcam-container {
+    margin-top: 20px;
+  }
+  #label-container {
+    margin-top: 15px;
+    font-size: 20px;
+    font-weight: bold;
+    color: #1b5e20;
+  }
+</style>
 </head>
 
 <body>
 
-  <header>🌱 Crop Disease Detector</header>
+<header>🌱 Crop Disease Detector</header>
 
-  <div class="container">
-    <p>Point your phone camera at a crop leaf.</p>
+<p>Place your crop leaf in front of the camera and click buttons:</p>
 
-    <button onclick="startCamera()">Start Camera</button>
-    <button onclick="predict()">Predict</button>
+<button onclick="init()">Start Camera</button>
+<button onclick="predictLeaf()">Predict</button>
 
-    <video id="video" autoplay playsinline></video>
+<div id="webcam-container"></div>
+<div id="label-container"></div>
 
-    <div id="status"></div>
-  </div>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
 
-  <script>
-    const video = document.getElementById("video");
-    const statusText = document.getElementById("status");
+<script>
+  const MODEL_URL = "https://teachablemachine.withgoogle.com/models/i7je_3xwZ/";
+  let model, webcam, labelContainer, maxPredictions;
 
-    async function startCamera() {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment" },
-          audio: false
-        });
-        video.srcObject = stream;
-        statusText.innerText = "Camera started ✔";
-        statusText.style.color = "green";
-      } catch (err) {
-        statusText.innerText = "Camera access denied ❌";
-        statusText.style.color = "red";
+  async function init() {
+    labelContainer = document.getElementById("label-container");
+    labelContainer.innerText = "Loading model and camera…";
+
+    model = await tmImage.load(MODEL_URL + "model.json", MODEL_URL + "metadata.json");
+    maxPredictions = model.getTotalClasses();
+
+    webcam = new tmImage.Webcam(320, 320, true);
+    await webcam.setup();
+    await webcam.play();
+    document.getElementById("webcam-container").appendChild(webcam.canvas);
+
+    labelContainer.innerText = "Model loaded — Ready!";
+  }
+
+  async function predictLeaf() {
+    if (!model || !webcam) {
+      alert("Start camera first!");
+      return;
+    }
+
+    const prediction = await model.predict(webcam.canvas);
+
+    let best = prediction[0];
+    for (let i = 1; i < prediction.length; i++) {
+      if (prediction[i].probability > best.probability) {
+        best = prediction[i];
       }
     }
 
-    function predict() {
-      statusText.innerText = "Prediction coming soon (AI model not added yet)";
-      statusText.style.color = "blue";
-    }
-  </script>
+    const percent = (best.probability * 100).toFixed(1);
+    labelContainer.innerText = `${best.className} — ${percent}%`;
+  }
+</script>
 
 </body>
 </html>
