@@ -1,10 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Crop Disease Detector</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8" />
+<title>AI Crop Disease Detector</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
+<!-- TensorFlow + Teachable Machine -->
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest"></script>
 
@@ -12,42 +13,49 @@
 body {
   margin: 0;
   font-family: Arial, sans-serif;
-  background: #eaf6ea;
+  background: #0f5132;
+  color: white;
   text-align: center;
 }
+
 header {
-  background: #2e7d32;
-  color: white;
+  background: #198754;
   padding: 15px;
   font-size: 22px;
+  font-weight: bold;
 }
+
 button {
   margin: 15px;
-  padding: 14px 26px;
+  padding: 14px 22px;
   font-size: 18px;
   border: none;
   border-radius: 8px;
-  background: #43a047;
-  color: white;
+  background: #20c997;
+  color: black;
+  cursor: pointer;
 }
-#camera {
-  margin: auto;
-  width: 320px;
-  height: 320px;
-  border: 4px solid #2e7d32;
-  border-radius: 10px;
+
+video {
+  width: 95%;
+  max-width: 420px;
+  border-radius: 12px;
+  margin-top: 10px;
+  background: black;
 }
+
 #result {
   margin-top: 15px;
   font-size: 20px;
   font-weight: bold;
 }
+
 #advice {
-  display: none;
   margin: 15px;
   padding: 15px;
-  background: #fff;
   border-radius: 10px;
+  display: none;
+  background: rgba(0,0,0,0.35);
 }
 </style>
 </head>
@@ -56,57 +64,70 @@ button {
 
 <header>🌱 Crop Disease Detector</header>
 
-<p>Open in Chrome/Safari and allow camera</p>
+<button onclick="startApp()">Start Camera & AI</button>
 
-<button onclick="startApp()">Start Camera</button>
+<br>
+<video id="video" autoplay playsinline muted></video>
 
-<div id="camera"></div>
 <div id="result">Waiting for prediction…</div>
 <div id="advice"></div>
 
 <script>
+/* 🔴 REPLACE THIS WITH YOUR MODEL LINK 🔴 */
 const MODEL_URL = "https://teachablemachine.withgoogle.com/models/bxWepcljR/";
 
-let model, webcam;
+let model;
 let history = [];
+const MAX_HISTORY = 12;
 
 async function startApp() {
-  model = await tmImage.load(
-    MODEL_URL + "model.json",
-    MODEL_URL + "metadata.json"
-  );
+  try {
+    // CAMERA
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" } },
+      audio: false
+    });
 
-  webcam = new tmImage.Webcam(320, 320, true);
-  await webcam.setup({ facingMode: "environment" });
-  await webcam.play();
+    const video = document.getElementById("video");
+    video.srcObject = stream;
+    await video.play();
 
-  document.getElementById("camera").innerHTML = "";
-  document.getElementById("camera").appendChild(webcam.canvas);
+    // MODEL
+    model = await tmImage.load(
+      MODEL_URL + "model.json",
+      MODEL_URL + "metadata.json"
+    );
 
-  window.requestAnimationFrame(loop);
+    loop();
+  } catch (err) {
+    alert("Camera or model blocked. Check browser permissions.");
+    console.error(err);
+  }
 }
 
 async function loop() {
-  webcam.update();
-  await predict();
-  window.requestAnimationFrame(loop);
+  if (model) {
+    await predict();
+  }
+  requestAnimationFrame(loop);
 }
 
 async function predict() {
+  const video = document.getElementById("video");
   const predictions = await model.predict(video);
 
-  const best = predictions.reduce((a, b) =>
+  let best = predictions.reduce((a, b) =>
     a.probability > b.probability ? a : b
   );
 
   history.push(best.className);
-  if (history.length > 8) history.shift();
+  if (history.length > MAX_HISTORY) history.shift();
 
   const stable = mostCommon(history);
   const confidence = (best.probability * 100).toFixed(1);
 
   document.getElementById("result").innerText =
-    `Prediction: ${stable} (${confidence}%)`;
+    `${stable} — ${confidence}%`;
 
   showAdvice(stable);
 }
@@ -124,17 +145,19 @@ function showAdvice(label) {
 
   if (label.toLowerCase().includes("unhealthy")) {
     advice.innerHTML = `
-      🚨 UNHEALTHY LEAVES<br>
-      ✔ Remove infected leaves<br>
-      ✔ Reduce watering<br>
-      ✔ Apply neem oil<br>
-      ✔ Improve sunlight
+      🚨 <b>Plant is Unhealthy</b><br><br>
+      • Remove infected leaves<br>
+      • Avoid over-watering<br>
+      • Use neem oil / fungicide<br>
+      • Improve sunlight & airflow<br>
+      • Isolate plant if possible
     `;
   } else {
     advice.innerHTML = `
-      ✅ HEALTHY LEAVES<br>
-      ✔ Continue normal care<br>
-      ✔ Monitor weekly
+      ✅ <b>Plant is Healthy</b><br><br>
+      • Continue normal watering<br>
+      • Monitor weekly<br>
+      • Maintain sunlight balance
     `;
   }
 }
@@ -142,4 +165,3 @@ function showAdvice(label) {
 
 </body>
 </html>
-
