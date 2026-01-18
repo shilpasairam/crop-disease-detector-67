@@ -1,153 +1,30 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <title>AI Crop Disease Detector</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <!-- TensorFlow + Teachable Machine -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest"></script>
-
-  <style>
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: linear-gradient(135deg, #2ecc71, #27ae60);
-      color: white;
-      text-align: center;
-    }
-    h1 { margin-top: 20px; }
-    #camera-container {
-      margin: 20px auto;
-      width: 320px;
-      height: 320px;
-      border-radius: 15px;
-      overflow: hidden;
-      box-shadow: 0 0 15px rgba(0,0,0,0.4);
-      background: black;
-    }
-    button {
-      padding: 12px 25px;
-      font-size: 16px;
-      border: none;
-      border-radius: 8px;
-      background: #1abc9c;
-      color: white;
-      cursor: pointer;
-      margin-top: 10px;
-    }
-    button:hover { background: #16a085; }
-    #prediction {
-      margin-top: 20px;
-      font-size: 20px;
-      font-weight: bold;
-    }
-    #remedy {
-      margin-top: 15px;
-      font-size: 16px;
-      background: rgba(0,0,0,0.3);
-      padding: 15px;
-      border-radius: 10px;
-      display: none;
-    }
-  </style>
+  <title>Camera Test</title>
 </head>
+<body style="margin:0; background:black;">
 
-<body>
-  <h1>🌱 AI Crop Disease Detector</h1>
-  <p>Point your camera at a leaf</p>
+<button onclick="startCamera()" style="font-size:20px; padding:15px; width:100%;">
+  START CAMERA
+</button>
 
-  <button onclick="init()">Start Camera</button>
-
-  <div id="camera-container"></div>
-
-  <div id="prediction">Waiting for camera...</div>
-  <div id="remedy"></div>
+<video id="video" autoplay playsinline style="width:100%; height:auto;"></video>
 
 <script>
-  const URL = "https://teachablemachine.withgoogle.com/models/i19IE4ia3/";
-  let model, webcam, maxPredictions;
-
-  // smoothing buffer
-  let history = [];
-
-  async function init() {
-    const modelURL = URL + "model.json";
-    const metadataURL = URL + "metadata.json";
-
-    model = await tmImage.load(modelURL, metadataURL);
-    maxPredictions = model.getTotalClasses();
-
-    webcam = new tmImage.Webcam(320, 320, true);
-    await webcam.setup({ facingMode: "environment" });
-    await webcam.play();
-
-    document.getElementById("camera-container").appendChild(webcam.canvas);
-    window.requestAnimationFrame(loop);
-  }
-
-  async function loop() {
-    webcam.update();
-    await predict();
-    window.requestAnimationFrame(loop);
-  }
-
-  async function predict() {
-    const prediction = await model.predict(webcam.canvas);
-
-    // take highest confidence
-    let best = prediction[0];
-    for (let i = 1; i < prediction.length; i++) {
-      if (prediction[i].probability > best.probability) {
-        best = prediction[i];
-      }
-    }
-
-    // smoothing
-    history.push(best.className);
-    if (history.length > 15) history.shift();
-
-    const stableClass = mostFrequent(history);
-    const confidence = (best.probability * 100).toFixed(1);
-
-    document.getElementById("prediction").innerText =
-      `Prediction: ${stableClass} (${confidence}%)`;
-
-    showRemedy(stableClass);
-  }
-
-  function mostFrequent(arr) {
-    return arr.sort((a,b) =>
-      arr.filter(v => v === a).length -
-      arr.filter(v => v === b).length
-    ).pop();
-  }
-
-  function showRemedy(label) {
-    const remedy = document.getElementById("remedy");
-
-    if (label.toLowerCase().includes("diseased") ||
-        label.toLowerCase().includes("unhealthy")) {
-      remedy.style.display = "block";
-      remedy.innerHTML = `
-        🚨 <b>Plant looks unhealthy</b><br><br>
-        ✔ Remove infected leaves<br>
-        ✔ Avoid over-watering<br>
-        ✔ Use neem oil / organic fungicide<br>
-        ✔ Keep plant isolated<br>
-        ✔ Ensure sunlight & airflow
-      `;
-    } else {
-      remedy.style.display = "block";
-      remedy.innerHTML = `
-        ✅ <b>Plant looks healthy</b><br><br>
-        ✔ Continue regular watering<br>
-        ✔ Maintain sunlight<br>
-        ✔ Monitor weekly
-      `;
-    }
-  }
+function startCamera() {
+  navigator.mediaDevices.getUserMedia({
+    video: { facingMode: "environment" }
+  })
+  .then(stream => {
+    document.getElementById("video").srcObject = stream;
+  })
+  .catch(err => {
+    alert("Camera error: " + err.message);
+  });
+}
 </script>
+
 </body>
 </html>
