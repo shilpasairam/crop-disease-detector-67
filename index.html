@@ -93,7 +93,7 @@ async function loop() {
 }
 
 async function predict() {
-  const predictions = await model.predict(webcam.canvas);
+  const predictions = await model.predict(video);
 
   const best = predictions.reduce((a, b) =>
     a.probability > b.probability ? a : b
@@ -142,3 +142,4 @@ function showAdvice(label) {
 
 </body>
 </html>
+
