@@ -1,95 +1,120 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>AI Crop Disease Detector</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8">
+<title>Crop Disease Detector</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest"></script>
+<!-- TensorFlow + Teachable Machine -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest"></script>
 
-  <style>
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #0f5132;
-      color: white;
-      text-align: center;
-    }
-    button {
-      padding: 15px;
-      font-size: 18px;
-      width: 100%;
-      border: none;
-      background: #198754;
-      color: white;
-    }
-    video {
-      width: 100%;
-      max-height: 60vh;
-      background: black;
-    }
-    #result {
-      font-size: 22px;
-      margin-top: 15px;
-    }
-    #advice {
-      margin: 15px;
-      padding: 15px;
-      background: rgba(0,0,0,0.3);
-      border-radius: 10px;
-      display: none;
-    }
-  </style>
+<style>
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #eaf6ea;
+  text-align: center;
+}
+
+header {
+  background: #2e7d32;
+  color: white;
+  padding: 15px;
+  font-size: 22px;
+  font-weight: bold;
+}
+
+button {
+  margin: 15px;
+  padding: 14px 26px;
+  font-size: 18px;
+  border: none;
+  border-radius: 8px;
+  background: #43a047;
+  color: white;
+}
+
+#camera {
+  margin: auto;
+  width: 90%;
+  max-width: 320px;
+  border: 4px solid #2e7d32;
+  border-radius: 10px;
+}
+
+#result {
+  margin-top: 15px;
+  font-size: 20px;
+  font-weight: bold;
+}
+
+#advice {
+  display: none;
+  margin: 15px;
+  padding: 15px;
+  background: #ffffff;
+  border-radius: 10px;
+  font-size: 16px;
+}
+</style>
 </head>
 
 <body>
 
-<button onclick="start()">START CAMERA & AI</button>
-<video id="video" autoplay playsinline></video>
+<header>🌱 Crop Disease Detector</header>
 
-<div id="result">Waiting…</div>
+<p>Place the crop leaf in front of the camera</p>
+
+<button onclick="startApp()">Start Camera</button>
+
+<div id="camera"></div>
+
+<div id="result">Waiting for prediction…</div>
+
 <div id="advice"></div>
 
 <script>
-const MODEL_URL = "https://teachablemachine.withgoogle.com/models/i19IE4ia3/";
-let model;
+const MODEL_URL = "https://teachablemachine.withgoogle.com/models/bxWepcljR/";
+
+let model, webcam;
 let history = [];
 
-async function start() {
-  // CAMERA (already proven to work)
-  const stream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: "environment" }
-  });
-  const video = document.getElementById("video");
-  video.srcObject = stream;
-
-  // LOAD MODEL
+async function startApp() {
+  // Load model
   model = await tmImage.load(
     MODEL_URL + "model.json",
     MODEL_URL + "metadata.json"
   );
 
-  requestAnimationFrame(loop);
+  // Setup webcam (THIS is the correct way)
+  webcam = new tmImage.Webcam(320, 320, true);
+  await webcam.setup({ facingMode: "environment" });
+  await webcam.play();
+
+  document.getElementById("camera").appendChild(webcam.canvas);
+
+  window.requestAnimationFrame(loop);
 }
 
 async function loop() {
+  webcam.update();
   await predict();
-  requestAnimationFrame(loop);
+  window.requestAnimationFrame(loop);
 }
 
 async function predict() {
-  const prediction = await model.predict(document.getElementById("video"));
+  const predictions = await model.predict(webcam.canvas);
 
-  let best = prediction.reduce((a, b) =>
+  let best = predictions.reduce((a, b) =>
     a.probability > b.probability ? a : b
   );
 
-  // Smooth results
+  // Smooth predictions
   history.push(best.className);
-  if (history.length > 10) history.shift();
-
+  if (history.length > 8) history.shift();
   const stable = mostCommon(history);
+
   const confidence = (best.probability * 100).toFixed(1);
 
   document.getElementById("result").innerText =
@@ -99,9 +124,9 @@ async function predict() {
 }
 
 function mostCommon(arr) {
-  return arr.sort((a,b) =>
-    arr.filter(v => v===a).length -
-    arr.filter(v => v===b).length
+  return arr.sort((a, b) =>
+    arr.filter(v => v === a).length -
+    arr.filter(v => v === b).length
   ).pop();
 }
 
@@ -109,22 +134,21 @@ function showAdvice(label) {
   const advice = document.getElementById("advice");
   advice.style.display = "block";
 
-  if (label.toLowerCase().includes("disease") ||
-      label.toLowerCase().includes("unhealthy")) {
+  if (label.toLowerCase().includes("unhealthy")) {
     advice.innerHTML = `
-      🚨 PLANT UNHEALTHY<br><br>
-      ✔ Remove infected leaves<br>
-      ✔ Stop over-watering<br>
-      ✔ Use neem oil / fungicide<br>
-      ✔ Isolate plant<br>
-      ✔ Improve sunlight & airflow
+      🚨 <b>UNHEALTHY LEAVES DETECTED</b><br><br>
+      ✔ Remove infected leaves immediately<br>
+      ✔ Avoid over-watering<br>
+      ✔ Apply neem oil or fungicide<br>
+      ✔ Improve sunlight & air circulation<br>
+      ✔ Isolate plant if possible
     `;
   } else {
     advice.innerHTML = `
-      ✅ PLANT HEALTHY<br><br>
-      ✔ Continue normal care<br>
-      ✔ Monitor weekly<br>
-      ✔ Maintain sunlight & water balance
+      ✅ <b>HEALTHY LEAVES</b><br><br>
+      ✔ Continue regular watering<br>
+      ✔ Ensure good sunlight<br>
+      ✔ Monitor plant weekly
     `;
   }
 }
