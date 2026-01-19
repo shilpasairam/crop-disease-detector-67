@@ -1,170 +1,102 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<title>AI Crop Disease Detector</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <title>Plant Disease Detector</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<!-- TensorFlow + Teachable Machine -->
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
-<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest"></script>
+  <!-- TensorFlow.js -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.15.0/dist/tf.min.js"></script>
+  <!-- Teachable Machine Image -->
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
 
-<style>
-body {
-  margin: 0;
-  font-family: Arial, sans-serif;
-  background: #0f5132;
-  color: white;
-  text-align: center;
-}
-
-header {
-  background: #198754;
-  padding: 15px;
-  font-size: 22px;
-  font-weight: bold;
-}
-
-button {
-  margin: 15px;
-  padding: 14px 22px;
-  font-size: 18px;
-  border: none;
-  border-radius: 8px;
-  background: #20c997;
-  color: black;
-  cursor: pointer;
-}
-
-video {
-  width: 95%;
-  max-width: 420px;
-  border-radius: 12px;
-  margin-top: 10px;
-  background: black;
-}
-
-#result {
-  margin-top: 15px;
-  font-size: 20px;
-  font-weight: bold;
-}
-
-#advice {
-  margin: 15px;
-  padding: 15px;
-  border-radius: 10px;
-  display: none;
-  background: rgba(0,0,0,0.35);
-}
-</style>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background: #f4f7f9;
+      padding: 10px;
+    }
+    h1 { color: #2c7a2c; }
+    video, img {
+      width: 100%;
+      max-width: 320px;
+      border-radius: 10px;
+    }
+    button {
+      padding: 10px 16px;
+      font-size: 16px;
+      margin: 8px;
+      border: none;
+      border-radius: 6px;
+      background: #2c7a2c;
+      color: white;
+      cursor: pointer;
+    }
+    #result {
+      font-size: 18px;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+  </style>
 </head>
 
 <body>
+  <h1>Plant Health Detector 🌱</h1>
 
-<header>🌱 Crop Disease Detector</header>
+  <button onclick="init()">Start Camera</button>
+  <input type="file" accept="image/*" onchange="predictImage(event)">
 
-<button onclick="startApp()">Start Camera & AI</button>
+  <div id="webcam-container"></div>
+  <div id="result"></div>
 
-<br>
-<video id="video" autoplay playsinline muted></video>
+  <script>
+    const MODEL_URL = "model/";
 
-<div id="result">Waiting for prediction…</div>
-<div id="advice"></div>
+    let model, webcam, maxPredictions;
 
-<script>
-/* 🔴 REPLACE THIS WITH YOUR MODEL LINK 🔴 */
-const MODEL_URL = "https://teachablemachine.withgoogle.com/models/YK81934Q0/";
+    async function init() {
+      model = await tmImage.load(
+        MODEL_URL + "model.json",
+        MODEL_URL + "metadata.json"
+      );
 
+      maxPredictions = model.getTotalClasses();
 
-let model;
-let history = [];
-const MAX_HISTORY = 12;
+      webcam = new tmImage.Webcam(300, 300, true);
+      await webcam.setup();
+      await webcam.play();
+      window.requestAnimationFrame(loop);
 
-async function startApp() {
-  try {
-    // CAMERA
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: "environment" } },
-      audio: false
-    });
+      document.getElementById("webcam-container").appendChild(webcam.canvas);
+    }
 
-    const video = document.getElementById("video");
-    video.srcObject = stream;
-    await video.play();
+    async function loop() {
+      webcam.update();
+      await predict();
+      window.requestAnimationFrame(loop);
+    }
 
-    // MODEL
-    model = await tmImage.load(
-      MODEL_URL + "model.json",
-      MODEL_URL + "metadata.json"
-    );
+    async function predict() {
+      const prediction = await model.predict(webcam.canvas);
+      prediction.sort((a, b) => b.probability - a.probability);
 
-    loop();
-  } catch (err) {
-    alert("Camera or model blocked. Check browser permissions.");
-    console.error(err);
-  }
-}
+      document.getElementById("result").innerHTML =
+        prediction[0].className + " : " +
+        (prediction[0].probability * 100).toFixed(2) + "%";
+    }
 
-async function loop() {
-  if (model) {
-    await predict();
-  }
-  requestAnimationFrame(loop);
-}
-
-async function predict() {
-  const video = document.getElementById("video");
-  const predictions = await model.predict(video);
-
-  let best = predictions.reduce((a, b) =>
-    a.probability > b.probability ? a : b
-  );
-
-  history.push(best.className);
-  if (history.length > MAX_HISTORY) history.shift();
-
-  const stable = mostCommon(history);
-  const confidence = (best.probability * 100).toFixed(1);
-
-  document.getElementById("result").innerText =
-    `${stable} — ${confidence}%`;
-
-  showAdvice(stable);
-}
-
-function mostCommon(arr) {
-  return arr.sort((a, b) =>
-    arr.filter(v => v === a).length -
-    arr.filter(v => v === b).length
-  ).pop();
-}
-
-function showAdvice(label) {
-  const advice = document.getElementById("advice");
-  advice.style.display = "block";
-
-  if (label.toLowerCase().includes("unhealthy")) {
-    advice.innerHTML = `
-      🚨 <b>Plant is Unhealthy</b><br><br>
-      • Remove infected leaves<br>
-      • Avoid over-watering<br>
-      • Use neem oil / fungicide<br>
-      • Improve sunlight & airflow<br>
-      • Isolate plant if possible
-    `;
-  } else {
-    advice.innerHTML = `
-      ✅ <b>Plant is Healthy</b><br><br>
-      • Continue normal watering<br>
-      • Monitor weekly<br>
-      • Maintain sunlight balance
-    `;
-  }
-}
-</script>
-
+    async function predictImage(event) {
+      const img = new Image();
+      img.src = URL.createObjectURL(event.target.files[0]);
+      img.onload = async () => {
+        const prediction = await model.predict(img);
+        prediction.sort((a, b) => b.probability - a.probability);
+        document.getElementById("result").innerHTML =
+          prediction[0].className + " : " +
+          (prediction[0].probability * 100).toFixed(2) + "%";
+      };
+    }
+  </script>
 </body>
 </html>
-
-
