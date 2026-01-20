@@ -1,47 +1,54 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Crop Disease Detector</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Crop Disease Detector</title>
 
-  <!-- TensorFlow & Teachable Machine -->
+  <!-- TensorFlow + Teachable Machine -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
 
   <style>
     body {
       margin: 0;
-      padding: 10px;
+      padding: 12px;
       font-family: Arial, sans-serif;
+      background: #f1f8f4;
       text-align: center;
-      background: #f2f7f2;
     }
     h1 {
       color: #1b5e20;
     }
     button {
-      padding: 12px 20px;
-      font-size: 16px;
+      padding: 14px;
+      font-size: 18px;
       background: #2e7d32;
       color: white;
       border: none;
-      border-radius: 6px;
-      cursor: pointer;
+      border-radius: 8px;
+      width: 100%;
+      max-width: 320px;
     }
     #webcam-container {
       margin-top: 15px;
     }
-    #status {
+    #result {
       font-size: 22px;
       font-weight: bold;
       margin-top: 12px;
     }
+    #advice {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 8px;
+      display: none;
+    }
     .healthy {
-      color: green;
+      color: #1b5e20;
     }
     .unhealthy {
-      color: red;
+      color: #b71c1c;
     }
   </style>
 </head>
@@ -49,69 +56,97 @@
 <body>
 
   <h1>🌱 Crop Disease Detector</h1>
-  <p>Click start and point camera at the leaf</p>
+  <p>Tap start and point camera at the leaf</p>
 
-  <button onclick="init()">Start Camera</button>
+  <button onclick="startApp()">Start Camera</button>
 
   <div id="webcam-container"></div>
-  <div id="status">Status: Waiting...</div>
+  <div id="result">Waiting...</div>
+  <div id="advice"></div>
 
   <script>
     let model, webcam;
+    let history = [];
 
-    async function init() {
+    async function startApp() {
       try {
         const modelURL = "./model.json";
         const metadataURL = "./metadata.json";
 
         model = await tmImage.load(modelURL, metadataURL);
 
-        webcam = new tmImage.Webcam(300, 300, false);
-
-        await webcam.setup({
-          facingMode: "environment"   // ✅ FIXED
-        });
-
+        webcam = new tmImage.Webcam(320, 320, false);
+        await webcam.setup({ facingMode: "environment" });
         await webcam.play();
-        document.getElementById("webcam-container").appendChild(webcam.canvas);
 
+        document.getElementById("webcam-container").appendChild(webcam.canvas);
         window.requestAnimationFrame(loop);
-        console.log("✅ Camera & model loaded");
-      } catch (err) {
-        alert("❌ Camera or model blocked.\nOpen via HTTPS and allow camera.");
-        console.error(err);
+
+      } catch (e) {
+        alert("Camera or model blocked.\nOpen via HTTPS and allow camera.");
+        console.error(e);
       }
     }
 
     async function loop() {
-  if (webcam && webcam.canvas) {
-    webcam.update();
-    await predict();
-  }
-  window.requestAnimationFrame(loop);
-}
-
+      if (webcam && webcam.canvas) {
+        webcam.update();
+        await predict();
+      }
+      requestAnimationFrame(loop);
+    }
 
     async function predict() {
       const predictions = await model.predict(webcam.canvas);
-
       let best = predictions.reduce((a, b) =>
         a.probability > b.probability ? a : b
       );
 
+      // prediction smoothing
+      history.push(best.className);
+      if (history.length > 8) history.shift();
+      const stable = mostCommon(history);
+
       const confidence = (best.probability * 100).toFixed(1);
-      const status = document.getElementById("status");
+      const result = document.getElementById("result");
+      const advice = document.getElementById("advice");
 
       if (
-        best.className.toLowerCase().includes("unhealthy") ||
-        best.className.toLowerCase().includes("disease")
+        stable.toLowerCase().includes("disease") ||
+        stable.toLowerCase().includes("unhealthy")
       ) {
-        status.innerHTML = `❌ UNHEALTHY (${confidence}%)`;
-        status.className = "unhealthy";
+        result.innerHTML = `❌ UNHEALTHY (${confidence}%)`;
+        result.className = "unhealthy";
+
+        advice.style.display = "block";
+        advice.innerHTML = `
+          🚨 <b>Plant Care Advice</b><br><br>
+          ✔ Remove infected leaves<br>
+          ✔ Avoid over-watering<br>
+          ✔ Apply neem oil / fungicide<br>
+          ✔ Improve airflow & sunlight<br>
+          ✔ Isolate affected plant
+        `;
       } else {
-        status.innerHTML = `✅ HEALTHY (${confidence}%)`;
-        status.className = "healthy";
+        result.innerHTML = `✅ HEALTHY (${confidence}%)`;
+        result.className = "healthy";
+
+        advice.style.display = "block";
+        advice.innerHTML = `
+          🌱 <b>Plant is Healthy</b><br><br>
+          ✔ Continue regular watering<br>
+          ✔ Monitor weekly<br>
+          ✔ Maintain sunlight balance
+        `;
       }
+    }
+
+    function mostCommon(arr) {
+      return arr.sort(
+        (a, b) =>
+          arr.filter(v => v === a).length -
+          arr.filter(v => v === b).length
+      ).pop();
     }
   </script>
 
