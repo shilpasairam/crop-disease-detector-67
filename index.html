@@ -57,60 +57,60 @@
   <div id="status">Status: Waiting...</div>
 
   <script>
-    const MODEL_PATH = "./";
-
-    let model, webcam, maxPredictions;
+    let model, webcam;
 
     async function init() {
-      const modelURL = MODEL_PATH + "model.json";
-      const metadataURL = MODEL_PATH + "metadata.json";
-
       try {
+        const modelURL = "./model.json";
+        const metadataURL = "./metadata.json";
+
         model = await tmImage.load(modelURL, metadataURL);
-        maxPredictions = model.getTotalClasses();
 
-        webcam = new tmImage.Webcam(300, 300, true);
-        await webcam.setup({ facingMode: "environment" }); // back camera
+        webcam = new tmImage.Webcam(300, 300, false);
+
+        await webcam.setup({
+          facingMode: "environment"   // ✅ FIXED
+        });
+
         await webcam.play();
-
         document.getElementById("webcam-container").appendChild(webcam.canvas);
-        window.requestAnimationFrame(loop);
 
-        console.log("✅ Model & Camera Loaded");
+        window.requestAnimationFrame(loop);
+        console.log("✅ Camera & model loaded");
       } catch (err) {
-        alert("Model or Camera failed to load");
+        alert("❌ Camera or model blocked.\nOpen via HTTPS and allow camera.");
         console.error(err);
       }
     }
 
     async function loop() {
-      webcam.update();
-      await predict();
-      window.requestAnimationFrame(loop);
-    }
+  if (webcam && webcam.canvas) {
+    webcam.update();
+    await predict();
+  }
+  window.requestAnimationFrame(loop);
+}
+
 
     async function predict() {
       const predictions = await model.predict(webcam.canvas);
 
-      let highest = predictions[0];
-      for (let i = 1; i < predictions.length; i++) {
-        if (predictions[i].probability > highest.probability) {
-          highest = predictions[i];
-        }
-      }
+      let best = predictions.reduce((a, b) =>
+        a.probability > b.probability ? a : b
+      );
 
-      const confidence = (highest.probability * 100).toFixed(1);
-      const statusDiv = document.getElementById("status");
+      const confidence = (best.probability * 100).toFixed(1);
+      const status = document.getElementById("status");
 
-      if (highest.className.toLowerCase().includes("unhealthy") ||
-          highest.className.toLowerCase().includes("disease")) {
-
-        statusDiv.innerHTML = `❌ UNHEALTHY (${confidence}%)`;
-        statusDiv.className = "unhealthy";
-
+      if (
+        best.className.toLowerCase().includes("unhealthy") ||
+        best.className.toLowerCase().includes("disease")
+      ) {
+        status.innerHTML = `❌ UNHEALTHY (${confidence}%)`;
+        status.className = "unhealthy";
       } else {
-        statusDiv.innerHTML = `✅ HEALTHY (${confidence}%)`;
-        statusDiv.className = "healthy";
+        status.innerHTML = `✅ HEALTHY (${confidence}%)`;
+        status.className = "healthy";
       }
     }
   </script>
