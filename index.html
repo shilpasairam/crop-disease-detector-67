@@ -5,20 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Crop Disease Detector</title>
 
-  <!-- TensorFlow + Teachable Machine -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
 
   <style>
     body {
       font-family: Arial, sans-serif;
-      background: #f2f7f2;
       text-align: center;
+      background: #f2f7f2;
       padding: 10px;
     }
-    h1 {
-      color: #1b5e20;
-    }
+    h1 { color: #1b5e20; }
     button {
       padding: 12px 20px;
       font-size: 16px;
@@ -27,9 +24,6 @@
       border: none;
       border-radius: 6px;
       cursor: pointer;
-    }
-    #webcam-container {
-      margin-top: 15px;
     }
     #status {
       font-size: 22px;
@@ -43,42 +37,32 @@
 </head>
 
 <body>
-
   <h1>🌱 Crop Disease Detector</h1>
-  <p>Click Start and show a leaf to the camera</p>
+  <p>Point the camera at a leaf</p>
 
   <button onclick="init()">Start Camera</button>
 
   <div id="webcam-container"></div>
-  <div id="status">Status: Waiting...</div>
+  <div id="status" class="analyzing">Analyzing...</div>
 
   <script>
     let model, webcam;
-
-    // 🔒 STABILITY VARIABLES
-    const labelHistory = [];
-    const HISTORY_SIZE = 12;
-    const CONFIDENCE_THRESHOLD = 0.75;
+    const history = [];
+    const HISTORY_SIZE = 7;       // smoothing window
+    const CONFIDENCE_THRESHOLD = 0.8;
 
     async function init() {
-      try {
-        const modelURL = "./model.json";
-        const metadataURL = "./metadata.json";
+      const modelURL = "./model.json";
+      const metadataURL = "./metadata.json";
 
-        model = await tmImage.load(modelURL, metadataURL);
+      model = await tmImage.load(modelURL, metadataURL);
 
-        webcam = new tmImage.Webcam(300, 300, false);
-        await webcam.setup({ facingMode: "environment" });
-        await webcam.play();
+      webcam = new tmImage.Webcam(300, 300, false);
+      await webcam.setup({ facingMode: "environment" });
+      await webcam.play();
 
-        document.getElementById("webcam-container").appendChild(webcam.canvas);
-        window.requestAnimationFrame(loop);
-
-        console.log("✅ Camera & model loaded");
-      } catch (e) {
-        alert("❌ Camera or model error.\nOpen via HTTPS and allow camera.");
-        console.error(e);
-      }
+      document.getElementById("webcam-container").appendChild(webcam.canvas);
+      window.requestAnimationFrame(loop);
     }
 
     async function loop() {
@@ -90,48 +74,34 @@
     async function predict() {
       const predictions = await model.predict(webcam.canvas);
 
-      // Highest probability prediction
       let best = predictions.reduce((a, b) =>
         a.probability > b.probability ? a : b
       );
 
-      // Store history
-      labelHistory.push(best.className);
-      if (labelHistory.length > HISTORY_SIZE) labelHistory.shift();
+      history.push(best);
+      if (history.length > HISTORY_SIZE) history.shift();
 
-      // Majority vote
-      const counts = {};
-      labelHistory.forEach(l => counts[l] = (counts[l] || 0) + 1);
-
-      let finalLabel = Object.keys(counts).reduce((a, b) =>
-        counts[a] > counts[b] ? a : b
-      );
-
-      // Average confidence
-      let avgConfidence = 0;
-      labelHistory.forEach(l => {
-        const p = predictions.find(x => x.className === l);
-        if (p) avgConfidence += p.probability;
-      });
-      avgConfidence /= labelHistory.length;
+      const avgConfidence =
+        history.reduce((sum, p) => sum + p.probability, 0) / history.length;
 
       const status = document.getElementById("status");
 
       if (avgConfidence < CONFIDENCE_THRESHOLD) {
-        status.innerHTML = "🔄 Analyzing leaf...";
+        status.innerHTML = "🔄 Analyzing...";
         status.className = "analyzing";
         return;
       }
 
-      if (finalLabel.toLowerCase().includes("disease")) {
-        status.innerHTML = "❌ DISEASED LEAF";
+      const label = best.className.toLowerCase();
+
+      if (label.includes("disease") || label.includes("unhealthy")) {
+        status.innerHTML = `❌ DISEASED (${(avgConfidence * 100).toFixed(1)}%)`;
         status.className = "unhealthy";
       } else {
-        status.innerHTML = "✅ HEALTHY LEAF";
+        status.innerHTML = `✅ HEALTHY (${(avgConfidence * 100).toFixed(1)}%)`;
         status.className = "healthy";
       }
     }
   </script>
-
 </body>
 </html>
