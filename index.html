@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Crop Disease Detector</title>
 
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js"></script>
@@ -11,10 +11,11 @@
   <style>
     body {
       font-family: Arial, sans-serif;
-      background: #f2f7f2;
       text-align: center;
-      padding: 15px;
+      background: #f2f7f2;
+      padding: 10px;
     }
+    h1 { color: #1b5e20; }
     button {
       padding: 12px 20px;
       font-size: 16px;
@@ -24,95 +25,83 @@
       border-radius: 6px;
       cursor: pointer;
     }
-    #result {
-      font-size: 24px;
+    #status {
+      font-size: 22px;
       font-weight: bold;
-      margin-top: 15px;
+      margin-top: 12px;
     }
     .healthy { color: green; }
-    .diseased { color: red; }
-    #advice {
-      margin-top: 10px;
-      font-size: 16px;
-    }
+    .unhealthy { color: red; }
+    .analyzing { color: orange; }
   </style>
 </head>
 
 <body>
+  <h1>🌱 Crop Disease Detector</h1>
+  <p>Point the camera at a leaf</p>
 
-<h1>🌱 Crop Disease Detector</h1>
-<p>Point the camera at a leaf</p>
+  <button onclick="init()">Start Camera</button>
 
-<button onclick="init()">Start Camera</button>
+  <div id="webcam-container"></div>
+  <div id="status" class="analyzing">Analyzing...</div>
 
-<div id="webcam-container"></div>
-<div id="result">Waiting...</div>
-<div id="advice"></div>
+  <script>
+    let model, webcam;
+    const history = [];
+    const HISTORY_SIZE = 7;       // smoothing window
+    const CONFIDENCE_THRESHOLD = 0.8;
 
-<script>
-  let model, webcam;
+    async function init() {
+      const modelURL = "./model.json";
+      const metadataURL = "./metadata.json";
 
-  async function init() {
-    const modelURL = "./model.json";
-    const metadataURL = "./metadata.json";
+      model = await tmImage.load(modelURL, metadataURL);
 
-    model = await tmImage.load(modelURL, metadataURL);
+      webcam = new tmImage.Webcam(300, 300, false);
+      await webcam.setup({ facingMode: "environment" });
+      await webcam.play();
 
-    webcam = new tmImage.Webcam(300, 300, true);
-    await webcam.setup({ facingMode: "environment" });
-    await webcam.play();
-
-    document.getElementById("webcam-container").appendChild(webcam.canvas);
-    window.requestAnimationFrame(loop);
-  }
-
-  async function loop() {
-    webcam.update();
-    await predict();
-    window.requestAnimationFrame(loop);
-  }
-
-  async function predict() {
-    const predictions = await model.predict(webcam.canvas);
-
-    const healthy = predictions.find(p =>
-      p.className.toLowerCase().includes("healthy")
-    );
-    const diseased = predictions.find(p =>
-      p.className.toLowerCase().includes("diseased")
-    );
-
-    const result = document.getElementById("result");
-    const advice = document.getElementById("advice");
-
-    if (!healthy || !diseased) {
-      result.innerText = "Class name mismatch!";
-      advice.innerText = "Check Teachable Machine class names";
-      return;
+      document.getElementById("webcam-container").appendChild(webcam.canvas);
+      window.requestAnimationFrame(loop);
     }
 
-    if (diseased.probability > 0.6) {
-      result.innerHTML = `❌ DISEASED (${(diseased.probability*100).toFixed(1)}%)`;
-      result.className = "diseased";
-      advice.innerHTML = `
-        • Isolate affected plant<br>
-        • Remove infected leaves<br>
-        • Use recommended fungicide
-      `;
-    } else if (healthy.probability > 0.6) {
-      result.innerHTML = `✅ HEALTHY (${(healthy.probability*100).toFixed(1)}%)`;
-      result.className = "healthy";
-      advice.innerHTML = `
-        • Continue regular watering<br>
-        • Ensure sunlight & nutrients
-      `;
-    } else {
-      result.innerHTML = "⚠️ Unclear image";
-      result.className = "";
-      advice.innerText = "Move closer & improve lighting";
+    async function loop() {
+      webcam.update();
+      await predict();
+      window.requestAnimationFrame(loop);
     }
-  }
-</script>
 
+    async function predict() {
+      const predictions = await model.predict(webcam.canvas);
+
+      let best = predictions.reduce((a, b) =>
+        a.probability > b.probability ? a : b
+      );
+
+      history.push(best);
+      if (history.length > HISTORY_SIZE) history.shift();
+
+      const avgConfidence =
+        history.reduce((sum, p) => sum + p.probability, 0) / history.length;
+
+      const status = document.getElementById("status");
+
+      if (avgConfidence < CONFIDENCE_THRESHOLD) {
+        status.innerHTML = "🔄 Analyzing...";
+        status.className = "analyzing";
+        return;
+      }
+
+      const label = best.className.toLowerCase();
+
+      if (label.includes("disease") || label.includes("unhealthy")) {
+        status.innerHTML = `❌ DISEASED (${(avgConfidence * 100).toFixed(1)}%)`;
+        status.className = "unhealthy";
+      } else {
+        status.innerHTML = `✅ HEALTHY (${(avgConfidence * 100).toFixed(1)}%)`;
+        status.className = "healthy";
+      }
+    }
+  </script>
 </body>
 </html>
